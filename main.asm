@@ -3,18 +3,18 @@
 option casemap :none
 
 
-include c:\masm32\include\windows.inc
-include c:\masm32\include\masm32.inc
-include c:\masm32\include\gdi32.inc
-include c:\masm32\include\user32.inc
-include c:\masm32\include\kernel32.inc
+include windows.inc
+include masm32.inc
+include gdi32.inc
+include user32.inc
+include kernel32.inc
 
-includelib C:\masm32\lib\masm32.lib
-includelib C:\masm32\lib\gdi32.lib
-includelib C:\masm32\lib\user32.lib
-includelib C:\masm32\lib\kernel32.lib
-include C:\masm32\include\msvcrt.inc
-includelib C:\masm32\lib\msvcrt.lib
+includelib masm32.lib
+includelib gdi32.lib
+includelib user32.lib
+includelib kernel32.lib
+include msvcrt.inc
+includelib msvcrt.lib
 
 
 WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
