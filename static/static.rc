@@ -1,0 +1,5 @@
+101 BITMAP "bitmap/snake.bmp"
+102 BITMAP "bitmap/fruit.bmp"
+103 BITMAP "bitmap/hp.bmp"
+104 BITMAP "bitmap/star.bmp"
+105 BITMAP "bitmap/boom.bmp"
