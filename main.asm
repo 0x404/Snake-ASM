@@ -20,13 +20,23 @@ includelib msvcrt.lib
 WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
 WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
 TopXY  PROTO  :DWORD,:DWORD
-random PROTO  :DWORD    ; 生成一个[0, ARG]之间的随机数
+random   PROTO  :DWORD   ; 生成一个[0, ARG]之间的随机数 
 initGame    PROTO       ; 初始化游戏参数变量
 randomApple PROTO       ; 随机生成一个食物，更新全局appleX, appleY，并按照概率可能生成爱心、星星、炸弹  
 randomHeart PROTO       ; 随机生成一个爱心，更新全局heartX, heartY
 randomStar  PROTO       ; 随机生成一个星星，更新全局starX, starY
 randomBoom  PROTO       ; 随机生成一个炸弹，更新全局boomX, boomY
 
+compare	PROTO: ptr byte,:ptr byte
+dtoc	PROTO 
+GetLine PROTO:  HANDLE,:ptr byte,:DWORD;读取history文件的每一个行，文件内已排好序
+Fileprocess PROTO: ptr byte,:DWORD;读取文件有三种操作类型，0时读取第一行，1时读取前20行，2时插入对应位置
+sprintf PROTO C :ptr sbyte, :VARARG
+strcmp PROTO C :ptr sbyte, :VARARG
+strcat PROTO C :ptr sbyte, :VARARG  
+strcpy PROTO C :ptr sbyte, :VARARG   
+strlen PROTO C :ptr sbyte, :VARARG 
+printf PROTO C :dword,   :VARARG
 .data
     WM_FINISH     equ WM_USER+100h
     
@@ -47,7 +57,7 @@ randomBoom  PROTO       ; 随机生成一个炸弹，更新全局boomX, boomY
 
     appName         byte "Grady Snake", 0           ; 主窗口名
     appClassName    byte "GradySnake", 0            ; 主窗口类名
-    scoreFormat     byte "Score: %d", 0             ; 分数输出格式
+    scoreFormat     byte "Score: %d rank1:%s ",0             ; 分数输出格式
     MessageBoxTitle byte "Result", 0                ; MessageBox标题
     MessageBoxFormat byte "You died! Score: %d", 0  ; MessageBox输出格式
     MessageBoxBuffer byte 64 dup(?)                 ; MessageBox输出
@@ -93,6 +103,20 @@ randomBoom  PROTO       ; 随机生成一个炸弹，更新全局boomX, boomY
     text          dw 64 dup(?)
     textRect      RECT <>
 
+	; 历史记录相关 hsj
+	file1_path DB 'rank.txt', 0 
+	buffer1 byte 2048 dup(0) 
+	rank byte 1024*50 dup(0) 
+	rankContent db '第%d级需得分%s', 0AH,0
+	ranktell db'您为第%d级',0AH,0
+	tell byte 100 dup(0) 
+	maxone  byte 2048 dup(0)
+	buffer_score byte 2048 dup(0) 
+	szmsg byte "HELLO",0ah,0
+	szmsg2 byte "world",0ah,0
+	MessagerankTitle byte "排名", 0  
+	len1 dword 0 
+	;hsj
 .code
 
 start:
@@ -102,7 +126,151 @@ start:
     mov CommandLine, eax
     invoke WinMain, hInstance, NULL, CommandLine, SW_SHOWDEFAULT
     invoke ExitProcess, eax
+;hsj
+compare proc str1:ptr byte,str2:ptr byte
+	mov esi,   str1  
+	mov edi ,  str2 
+L0:	
+	mov  al,byte ptr[esi]
+	mov  dl,byte ptr[edi]
+	.IF  al>dl
+	mov eax,1
+	ret
+	.ENDIF
+	.IF  al<dl
+	mov eax,-1
+	ret
+	.ENDIF
+	inc esi
+	inc edi
+	cmp byte ptr[esi],0
+	je endfunc
+	cmp byte ptr[edi],0
+	je endfunc
+	jmp L0
+endfunc:
+	mov eax,0
+	ret
+compare endp
 
+dtoc proc   
+    mov eax,score
+	xor edx,edx
+	xor ecx,ecx
+	mov ebx, 10	;设置除数
+
+	rem:	
+	div ebx	;执行安全的除法
+	push edx
+	inc ecx
+	xor edx,edx
+	cmp eax,edx
+	jnz rem
+	mov edi,offset buffer_score
+		
+	copy:	;把栈中的数据复制到string中
+	pop eax		
+	add al,'0';把对应的数字转换成ASCII码 
+	mov [edi],al
+	inc edi
+	loop copy  
+	mov byte ptr[edi],0 
+	ret
+dtoc endp
+
+;hsj
+GetLine proc fp: HANDLE, buffer2:ptr byte, worktype:DWORD;读取rank文件的每一个行，文件内已排好序
+	local len: dword
+	local char: byte 
+	push esi
+	mov esi, buffer2
+	mov edi, 0  
+
+L0:	invoke ReadFile, fp, addr char, 1, addr len, NULL
+	cmp len, 0
+	je L1 
+	cmp char, 10
+	je L1
+	mov al, char
+	mov byte ptr [esi], al
+	inc esi
+	inc edi 
+	jmp L0
+
+L1:
+   .IF worktype==0
+	dec esi
+	.ENDIF 
+	.IF worktype==2
+	dec esi
+	.ENDIF 
+	mov byte ptr [esi], 0  
+	mov eax,edi
+	pop esi
+	ret 
+
+GetLine endp
+;hsj
+Fileprocess proc fpath1:ptr byte, worktype:dword
+	
+	local line1 :dword 
+	local file1 :HANDLE 
+	local index_line :dword   
+	local buffer_ranke[1024] :byte 
+	mov index_line, 0  
+	mov esi, offset rank
+	mov byte ptr[esi], 0
+	invoke CreateFile, fpath1, GENERIC_READ, FILE_SHARE_READ, NULL,OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL
+	mov file1, eax 
+	invoke dtoc  
+L0:
+	inc index_line 
+	invoke GetLine, file1, offset buffer1, worktype
+	mov line1, eax  
+	
+L1:
+	cmp line1, 0
+	jne L2   
+	jmp ENDFUNC
+L2:
+	.IF worktype==0
+	.IF index_line==1 
+	invoke strcpy, offset maxone, addr buffer1
+	;invoke printf,offset maxone
+	jmp ENDFUNC
+	.ENDIF
+	.ENDIF
+	.IF worktype==2   
+		invoke strlen, offset buffer_score     
+		mov len1, eax 
+		invoke strlen, offset buffer1  
+		 .IF eax<len1   
+		 invoke sprintf, addr buffer_ranke, offset ranktell, index_line 
+		 ;invoke printf,addr buffer_ranke
+		 invoke strcat, offset tell, addr buffer_ranke 
+		 mov worktype,-1 
+		 ret 
+		 .ELSEIF eax==len1 
+		 invoke compare,offset buffer_score,offset buffer1 
+		 .IF eax==1 
+		 invoke sprintf, addr buffer_ranke, offset ranktell, index_line  
+		 ;invoke printf,addr buffer_ranke
+		 invoke strcat, offset tell, addr buffer_ranke 
+		 mov worktype,-1 
+		 ret
+		 .ENDIF
+		 .ENDIF 
+	.ENDIF
+	invoke sprintf, addr buffer_ranke, offset rankContent, index_line,offset buffer1
+	;invoke printf,addr buffer_ranke
+	invoke strcat, offset rank, addr buffer_ranke 
+	jmp L0 
+	
+
+ENDFUNC: 
+	ret 
+Fileprocess endp
+;hsj
 
 WinMain proc hInst:DWORD, hPrevInst:DWORD, CmdLine:DWORD, CmdShow:DWORD
     LOCAL wc:WNDCLASSEX
@@ -112,9 +280,10 @@ WinMain proc hInst:DWORD, hPrevInst:DWORD, CmdLine:DWORD, CmdShow:DWORD
     LOCAL Wht:DWORD
     LOCAL Wtx:DWORD
     LOCAL Wty:DWORD
-
+	
     mov wc.cbSize, sizeof WNDCLASSEX
     mov wc.style, CS_HREDRAW or CS_VREDRAW or CS_BYTEALIGNWINDOW
+	invoke Fileprocess,offset file1_path, 0 
     mov wc.lpfnWndProc, offset WndProc
     mov wc.cbClsExtra, NULL
     mov wc.cbWndExtra, NULL
@@ -315,11 +484,12 @@ LOCAL paint:PAINTSTRUCT
 
         ; 绘制分数栏目
         mov eax, score
-        invoke crt_sprintf, addr text, addr scoreFormat, score
-        ; 分数栏位置
+		
+        invoke crt_sprintf, addr text, addr scoreFormat, score, offset maxone;hsj
+        ; 分数栏位置 
         mov textRect.left, 10
         mov textRect.top, 10
-        mov textRect.right, 100
+        mov textRect.right, 220;hsj
         mov textRect.bottom, 30
         ; 绘制
         invoke SetBkColor, DCHandle, textColor
@@ -433,8 +603,12 @@ LOCAL i:DWORD
         ; 检查是否与边界碰撞
         .IF snakeX[0] < 0 || snakeY[0] < 0 || snakeX[0] >= MAP_WIDTH || snakeY[0] >= MAP_HEIGHT
             invoke crt_sprintf, addr MessageBoxBuffer, addr MessageBoxFormat, score
-            invoke MessageBoxA, NULL, offset MessageBoxBuffer, offset MessageBoxTitle, MB_OK
-            invoke initGame
+			invoke MessageBoxA, NULL, offset MessageBoxBuffer, offset MessageBoxTitle, MB_OK 
+			invoke Fileprocess,offset file1_path, 1
+			invoke MessageBoxA, NULL, offset rank, offset MessagerankTitle, MB_OK  ;HSJ
+			invoke Fileprocess,offset file1_path, 2
+			invoke MessageBoxA, NULL, offset tell, offset MessagerankTitle, MB_OK  ;HSJ
+			invoke initGame
         .ENDIF
 
         ; 检查是否撞到自己
@@ -444,7 +618,11 @@ LOCAL i:DWORD
             mov ebx, snakeY[4 * esi]
             .IF snakeX[0] == eax && snakeY[0] == ebx
                 invoke crt_sprintf, addr MessageBoxBuffer, addr MessageBoxFormat, score
+				invoke Fileprocess,offset file1_path, 1
+				invoke MessageBoxA, NULL, offset rank, offset MessagerankTitle, MB_OK  ;hsj
                 invoke MessageBoxA, NULL, offset MessageBoxBuffer, offset MessageBoxTitle, MB_OK
+				invoke Fileprocess,offset file1_path, 2
+				invoke MessageBoxA, NULL, offset tell, offset MessagerankTitle, MB_OK  ;HSJ
                 invoke initGame
             .ENDIF
             inc esi
@@ -478,13 +656,15 @@ initGame proc
     mov snakeDir, eax
 
     ; 蛇位置初始化
-    invoke random, MAP_WIDTH
+    invoke random , MAP_WIDTH/2 
+	add eax,MAP_WIDTH/4 
     mov snakeX[0], eax
-    invoke random, MAP_HEIGHT
+    invoke random , MAP_HEIGHT/2
+	add eax,MAP_HEIGHT/4 
     mov snakeY[0], eax
 
     ; 蛇数组初始化
-    mov ecx, 1
+    mov ecx,1
     .WHILE ecx < BLOCK_NUM
         mov snakeX[4 * ecx], -1
         mov snakeY[4 * ecx], -1 
