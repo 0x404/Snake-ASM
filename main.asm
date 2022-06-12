@@ -47,6 +47,7 @@ printf PROTO C :dword,   :VARARG
     HEART       equ 103     ; 代表爱心的位图ID
     BOOM        equ 105     ; 代表炸弹的位图ID
     GSnake      equ 106     ; 代表幽灵蛇位图ID
+    BLOCK       equ 107     ; 代表墙体ID
 
     UP          equ 0       ; 上方向
     DOWN        equ 1       ; 下方向
@@ -71,6 +72,8 @@ printf PROTO C :dword,   :VARARG
 
     snakeX        dd BLOCK_NUM dup(?)               ; 蛇的x坐标数组, snakeX[0]表示蛇头部的x坐标
     snakeY        dd BLOCK_NUM dup(?)               ; 蛇的y坐标数组，snakeY[0]表示蛇头部的y坐标
+    blockX        dd BLOCK_NUM dup(?)
+    blockY        dd BLOCK_NUM dup(?)
     snakeDir      dd ?                              ; 蛇头的方向
     gsDir       dd ?                              ; 幽灵蛇的方向
     snakeSize     dd ?                              ; 蛇的长度
@@ -92,7 +95,8 @@ printf PROTO C :dword,   :VARARG
     starHandle      dd ?                            ; 星星位图handle
     heartHandle     dd ?                            ; 爱心位图handle
     boomHandle      dd ?                            ; 炸弹位图handle
-    gsHandle      dd ?                            ; 幽灵蛇位图handle
+    gsHandle        dd ?                            ; 幽灵蛇位图handle
+    blockHandle     dd ?                            ; 墙体位图handle
 
     score           dd ?                            ; 游戏分数
     
@@ -380,6 +384,9 @@ LOCAL paint:PAINTSTRUCT
         ; 加载幽灵蛇位图
         invoke LoadBitmap, hInstance, GSnake
         mov gsHandle, eax
+        ; 加载墙体位图handle
+        invoke LoadBitmap, hInstance, BLOCK
+        mov blockHandle, eax
         ; 初始化游戏参数
         invoke initGame
         ; 初始化进程
@@ -438,6 +445,8 @@ LOCAL paint:PAINTSTRUCT
         mov    DCHandle, eax
         invoke CreateCompatibleDC, DCHandle
         mov    hCompatibleDC, eax
+
+       
 
         ; 绘制食物
         invoke SelectObject, hCompatibleDC, appleHandle
@@ -519,6 +528,24 @@ LOCAL paint:PAINTSTRUCT
             inc edi
             jmp drawgs
         drawFinish1:
+
+        invoke SelectObject, hCompatibleDC, blockHandle
+        mov edi, 0
+        blockStart:
+            mov ebx, blockX[4 * edi]
+            cmp ebx, -1
+            je blockEnd
+
+            mov ebx, blockX[4 * edi]
+            imul ebx, BLOCK_SIZE
+            mov ecx, blockY[4 * edi]
+            imul ecx, BLOCK_SIZE
+
+            invoke BitBlt, DCHandle, ebx, ecx, BLOCK_SIZE, BLOCK_SIZE, hCompatibleDC, 0, 0, SRCCOPY
+            
+            inc edi
+            jmp blockStart
+        blockEnd:
         ; 绘制分数栏目
         mov eax, score
 		
@@ -703,6 +730,25 @@ LOCAL i:DWORD
             inc esi
         .ENDW
 
+        mov esi, 0
+        .WHILE esi < BLOCK_NUM
+            mov eax, blockX[4 * esi]
+            mov ebx, blockY[4 * esi]
+            .IF eax == -1
+                jmp L
+            .ENDIF
+            .IF snakeX[0] == eax && snakeY[0] == ebx
+                invoke crt_sprintf, addr MessageBoxBuffer, addr MessageBoxFormat, score
+				invoke Fileprocess,offset file1_path, 1
+				invoke MessageBoxA, NULL, offset rank, offset MessagerankTitle, MB_OK  ;hsj
+                invoke MessageBoxA, NULL, offset MessageBoxBuffer, offset MessageBoxTitle, MB_OK
+				invoke Fileprocess,offset file1_path, 2
+				invoke MessageBoxA, NULL, offset tell, offset MessagerankTitle, MB_OK  ;HSJ
+                invoke initGame
+            .ENDIF
+            inc esi
+        .ENDW
+        L:
         invoke  SendMessage, hWnd, WM_FINISH, NULL, NULL
 
     .ENDIF
@@ -724,6 +770,31 @@ initGame proc
     mov gsX[0], -1
     mov gsY[0], -1
     mov score, 0
+
+    mov ecx, 5
+    mov eax, 0
+    .WHILE ecx <= 20
+        mov blockX[eax * 4], 5
+        mov blockY[eax * 4], ecx
+        inc eax
+        inc ecx
+    .ENDW
+    mov ecx, 5
+    .WHILE ecx <= 20
+        mov blockX[eax * 4], ecx
+        mov blockY[eax * 4], 5
+        inc eax
+        mov blockX[eax * 4], ecx
+        mov blockY[eax * 4], 20
+        inc eax
+        inc ecx
+    .ENDW
+    .WHILE eax < BLOCK_NUM
+        mov blockX[4 * eax], -1
+        mov blockY[4 * eax], -1
+        inc eax
+    .ENDW
+    
     
     ; 蛇长度初始化
     mov snakeSize, 1
@@ -818,6 +889,18 @@ randomApple proc
             inc edi
         .ENDW
 
+        mov edi, 0
+        .WHILE  edi < BLOCK_NUM
+            mov eax, blockX[4 * edi]
+            imul eax, MAP_WIDTH
+            add eax, blockY[4 * edi]
+
+            .IF esi == eax
+                jmp confict
+            .ENDIF
+             inc edi
+        .ENDW
+
         ; 当前枚举位置没有冲突，更新到tmp数组中
         mov edx, esi
         mov ecx, tot
@@ -897,6 +980,18 @@ LOCAL tot:DWORD
             inc edi
         .ENDW
 
+         mov edi, 0
+        .WHILE  edi < BLOCK_NUM
+            mov eax, blockX[4 * edi]
+            imul eax, MAP_WIDTH
+            add eax, blockY[4 * edi]
+
+            .IF esi == eax
+                jmp confict
+            .ENDIF
+            inc edi
+        .ENDW
+
         mov edx, esi
         mov ecx, tot
         mov tmp[4 * ecx], edx
@@ -961,6 +1056,18 @@ LOCAL tot:DWORD
             .ENDIF
         
             inc edi
+        .ENDW
+
+         mov edi, 0
+        .WHILE  edi < BLOCK_NUM
+            mov eax, blockX[4 * edi]
+            imul eax, MAP_WIDTH
+            add eax, blockY[4 * edi]
+
+            .IF esi == eax
+                jmp confict
+            .ENDIF
+             inc edi
         .ENDW
 
         mov edx, esi
@@ -1035,6 +1142,18 @@ LOCAL tot:DWORD
             .ENDIF
         
             inc edi
+        .ENDW
+
+         mov edi, 0
+        .WHILE  edi < BLOCK_NUM
+            mov eax, blockX[4 * edi]
+            imul eax, MAP_WIDTH
+            add eax, blockY[4 * edi]
+    
+            .IF esi == eax
+                jmp confict
+            .ENDIF
+             inc edi
         .ENDW
 
         mov edx, esi
