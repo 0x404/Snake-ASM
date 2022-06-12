@@ -3,3 +3,4 @@
 103 BITMAP "bitmap/hp.bmp"
 104 BITMAP "bitmap/star.bmp"
 105 BITMAP "bitmap/boom.bmp"
+106 BITMAP "bitmap/ghost.bmp"

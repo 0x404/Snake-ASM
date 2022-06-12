@@ -26,6 +26,7 @@ randomApple PROTO       ; 随机生成一个食物，更新全局appleX, appleY�
 randomHeart PROTO       ; 随机生成一个爱心，更新全局heartX, heartY
 randomStar  PROTO       ; 随机生成一个星星，更新全局starX, starY
 randomBoom  PROTO       ; 随机生成一个炸弹，更新全局boomX, boomY
+randomGs  PROTO       ; 随机生成一个幽灵蛇，更新全局gsX[0], gsY[0]
 
 compare	PROTO: ptr byte,:ptr byte
 dtoc	PROTO 
@@ -45,6 +46,7 @@ printf PROTO C :dword,   :VARARG
     STAR        equ 104     ; 代表星星的位图ID
     HEART       equ 103     ; 代表爱心的位图ID
     BOOM        equ 105     ; 代表炸弹的位图ID
+    GSnake      equ 106     ; 代表幽灵蛇位图ID
 
     UP          equ 1       ; 上方向
     DOWN        equ 2       ; 下方向
@@ -54,20 +56,25 @@ printf PROTO C :dword,   :VARARG
     MAP_HEIGHT  equ 30      ; 画面高度，30个位图
     MAP_WIDTH   equ 30      ; 画面宽度，30个位图
     BLOCK_NUM   equ 900     ; 总位图个数
+    BLOCK_NUM1  equ 900     ; 总位图个数
 
     appName         byte "Grady Snake", 0           ; 主窗口名
     appClassName    byte "GradySnake", 0            ; 主窗口类名
     scoreFormat     byte "Score: %d rank1:%s ",0             ; 分数输出格式
     MessageBoxTitle byte "Result", 0                ; MessageBox标题
     MessageBoxFormat byte "You died! Score: %d", 0  ; MessageBox输出格式
+    MessageBoxFormat1 byte "Yon win!", 0
     MessageBoxBuffer byte 64 dup(?)                 ; MessageBox输出
 
     tmp           DWORD BLOCK_NUM dup(-1)           ; 临时缓存区，用于存储可用的坐标（不与图上已有点冲突）
+    tmp1           DWORD BLOCK_NUM1 dup(-1)           ; 临时缓存区，用于存储可用的坐标（不与图上已有点冲突）
 
     snakeX        dd BLOCK_NUM dup(?)               ; 蛇的x坐标数组, snakeX[0]表示蛇头部的x坐标
     snakeY        dd BLOCK_NUM dup(?)               ; 蛇的y坐标数组，snakeY[0]表示蛇头部的y坐标
     snakeDir      dd ?                              ; 蛇头的方向
+    gsDir       dd ?                              ; 幽灵蛇的方向
     snakeSize     dd ?                              ; 蛇的长度
+    gsSize      dd ?                               ; 幽灵蛇的长度
 
     appleX        DWORD -1                          ; 食物在图上的x坐标，-1表示不存在
     appleY        DWORD -1                          ; 食物在图上的y坐标，-1表示不存在
@@ -77,11 +84,15 @@ printf PROTO C :dword,   :VARARG
     starY         DWORD -1                          ; 星星在图上的y坐标，-1表示不存在
     boomX         DWORD -1                          ; 炸弹在图上的x坐标，-1表示不存在
     boomY         DWORD -1                          ; 炸弹在图上的y坐标，-1表示不存在
+    gsX         dd BLOCK_NUM1 dup(?)                          ; 幽灵蛇在图上的x坐标，-1表示不存在
+    gsY         dd BLOCK_NUM1 dup(?)                          ; 幽灵蛇在图上的y坐标，-1表示不存在
     snakeHandle     dd ?                            ; 蛇位图handle
+    snakeHandle1    dd ?                            ; 蛇位图handle1
     appleHandle     dd ?                            ; 食物位图handle
     starHandle      dd ?                            ; 星星位图handle
     heartHandle     dd ?                            ; 爱心位图handle
     boomHandle      dd ?                            ; 炸弹位图handle
+    gsHandle      dd ?                            ; 幽灵蛇位图handle
 
     score           dd ?                            ; 游戏分数
     
@@ -366,6 +377,9 @@ LOCAL paint:PAINTSTRUCT
         ; 加载炸弹位图
         invoke LoadBitmap, hInstance, BOOM
         mov boomHandle, eax
+        ; 加载幽灵蛇位图
+        invoke LoadBitmap, hInstance, GSnake
+        mov gsHandle, eax
         ; 初始化游戏参数
         invoke initGame
         ; 初始化进程
@@ -378,8 +392,10 @@ LOCAL paint:PAINTSTRUCT
         ; 关闭窗口，关闭handle
         invoke DeleteObject, appleHandle
         invoke DeleteObject, snakeHandle
+        invoke DeleteObject, snakeHandle1
         invoke DeleteObject, starHandle
         invoke DeleteObject, boomHandle
+        invoke DeleteObject, gsHandle
         invoke DeleteObject, heartHandle
         invoke PostQuitMessage,NULL
         mov eax, 0
@@ -463,6 +479,7 @@ LOCAL paint:PAINTSTRUCT
 
         ;绘制蛇
         invoke SelectObject, hCompatibleDC, snakeHandle
+        invoke SelectObject, hCompatibleDC, snakeHandle1
         mov edi, 0
         drawSnake:
             mov ebx, snakeX[4 * edi]
@@ -482,6 +499,26 @@ LOCAL paint:PAINTSTRUCT
             jmp drawSnake
         drawFinish:
 
+        ;绘制幽灵蛇
+        invoke SelectObject, hCompatibleDC, gsHandle
+        mov edi, 0
+        drawgs:
+            mov ebx, gsX[4 * edi]
+
+            cmp ebx, -1
+            je drawFinish1
+
+            mov ebx, gsX[4 * edi]
+            imul ebx, BLOCK_SIZE
+
+            mov  ecx, gsY[4 * edi]
+            imul ecx, BLOCK_SIZE
+
+            invoke BitBlt, DCHandle, ebx, ecx, BLOCK_SIZE, BLOCK_SIZE, hCompatibleDC, 0, 0, SRCCOPY
+            
+            inc edi
+            jmp drawgs
+        drawFinish1:
         ; 绘制分数栏目
         mov eax, score
 		
@@ -555,6 +592,36 @@ LOCAL i:DWORD
             sub snakeX[0], 1
         .ENDIF
 
+         mov esi, gsSize
+        dec esi
+        
+        ; 将幽灵蛇向前移动一个位置
+        ; 如当前蛇的数组[(x1, y1), (x2, y2), (x3, y3)]
+        ; 变成：[(x1, y1), (x1, y1), (x2, y2)]
+        movForward1:
+            mov ebx, gsX[4 * esi]
+            mov gsX[4 * esi + 4], ebx
+            mov ebx, gsY[4 * esi]
+            mov gsY[4 * esi + 4], ebx
+            cmp esi, 0
+            jz movFinish1
+            dec esi
+            jmp movForward1
+        movFinish1:
+
+        ; 根据当前全局方向更新蛇数组的第一个位置
+        ; 即把上述[(x1, y1), (x1, y1), (x2, y2)]
+        ; 变成[(x_new, y_new), (x1, y1), (x2, y2)]
+
+        .IF gsDir == UP
+            sub gsY[0], 1
+        .ELSEIF gsDir == RIGHT
+            add gsX[0], 1
+        .ELSEIF gsDir == DOWN
+            add gsY[0], 1
+        .ELSEIF gsDir == LEFT
+            sub gsX[0], 1
+        .ENDIF
         ; 检查蛇是否吃掉食物
         mov eax, appleX
         mov ebx, appleY
@@ -595,6 +662,14 @@ LOCAL i:DWORD
             mov boomY, -1
         .ENDIF
 
+        ; 检查蛇是撞到幽灵蛇
+        mov eax, gsX[0]
+        mov ebx, gsY[0]
+        .IF eax == snakeX && ebx == snakeY
+            invoke crt_sprintf, addr MessageBoxBuffer, addr MessageBoxFormat1
+            invoke MessageBoxA, NULL, offset MessageBoxBuffer, offset MessageBoxTitle, MB_OK
+            invoke initGame
+        .ENDIF
         ; 更新完长度后更新蛇的数组结束位置
         mov ebx, snakeSize
         mov snakeX[4 * ebx], -1
@@ -646,15 +721,20 @@ initGame proc
     mov heartY, -1
     mov boomX, -1
     mov boomY, -1
+    mov gsX[0], -1
+    mov gsY[0], -1
     mov score, 0
     
     ; 蛇长度初始化
     mov snakeSize, 1
-
+    mov gsSize, 3
     ; 蛇方向初始化
     invoke random, 4
     mov snakeDir, eax
 
+    ; 幽灵蛇方向初始化
+    invoke random, 4
+    mov gsDir, eax
     ; 蛇位置初始化
     invoke random , MAP_WIDTH/2 
 	add eax,MAP_WIDTH/4 
@@ -671,6 +751,13 @@ initGame proc
         inc ecx
     .ENDW
 
+     ; 幽灵蛇数组初始化
+    mov ecx, 1
+    .WHILE ecx < BLOCK_NUM1
+        mov gsX[4 * ecx], -1
+        mov gsY[4 * ecx], -1 
+        inc ecx
+    .ENDW
     ; 随机初始化食物坐标
     invoke randomApple
     ret
@@ -765,6 +852,7 @@ randomApple proc
     .IF eax <= 2
         invoke randomBoom
     .ENDIF
+    invoke randomGs
     ret
 randomApple endp
 
@@ -973,6 +1061,83 @@ LOCAL tot:DWORD
     ret
 
 randomBoom endp
+
+randomGs proc
+LOCAL tot:DWORD
+    ; 随机初始幽灵蛇位置，同上
+    mov esi, 0
+    mov tot, 0
+    
+    .WHILE esi < BLOCK_NUM
+        mov edi, 0
+
+        .WHILE edi < snakeSize
+            
+            mov eax, snakeY[4 * edi]
+            imul eax, MAP_WIDTH
+            add eax, snakeX[4 * edi]
+
+            .IF esi == eax
+                jmp confict
+            .ENDIF
+
+            .IF appleX != -1 && appleY != -1
+                mov eax, appleY
+                imul eax, MAP_WIDTH
+                add eax, appleX
+                .IF esi == eax
+                    jmp confict
+                .ENDIF
+            .ENDIF
+
+            .IF starX != -1 && starY != -1
+                mov eax, starY
+                imul eax, MAP_WIDTH
+                add eax, starX
+                .IF esi == eax
+                    jmp confict
+                .ENDIF
+            .ENDIF
+
+            .IF heartX != -1 && heartY != -1
+                mov eax, heartX
+                imul eax, MAP_WIDTH
+                add eax, heartY
+                .IF esi == eax
+                    jmp confict
+                .ENDIF
+            .ENDIF
+        
+            inc edi
+        .ENDW
+
+        mov edx, esi
+        mov ecx, tot
+        mov tmp[4 * ecx], edx
+        inc tot
+
+    confict:
+        inc esi
+
+    .ENDW
+
+    dec tot
+    invoke random, tot
+
+    mov eax, tmp[4 * eax]
+    mov ebx, MAP_WIDTH
+    mov edx, 0
+    div ebx
+
+    mov gsX[0], edx
+    mov gsY[0], eax
+
+    ; invoke random, 4
+    ; mov gsDir, eax
+
+    ret
+
+randomGs endp
 
 end start
 
