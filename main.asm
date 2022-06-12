@@ -48,10 +48,10 @@ printf PROTO C :dword,   :VARARG
     BOOM        equ 105     ; 代表炸弹的位图ID
     GSnake      equ 106     ; 代表幽灵蛇位图ID
 
-    UP          equ 1       ; 上方向
-    DOWN        equ 2       ; 下方向
-    LEFT        equ 3       ; 左方向
-    RIGHT       equ 4       ; 右方向
+    UP          equ 0       ; 上方向
+    DOWN        equ 1       ; 下方向
+    LEFT        equ 2       ; 左方向
+    RIGHT       equ 3       ; 右方向
     BLOCK_SIZE  equ 25      ; 位图方块大小
     MAP_HEIGHT  equ 30      ; 画面高度，30个位图
     MAP_WIDTH   equ 30      ; 画面宽度，30个位图
@@ -729,11 +729,11 @@ initGame proc
     mov snakeSize, 1
     mov gsSize, 3
     ; 蛇方向初始化
-    invoke random, 4
+    invoke random, 3
     mov snakeDir, eax
 
     ; 幽灵蛇方向初始化
-    invoke random, 4
+    invoke random, 3
     mov gsDir, eax
     ; 蛇位置初始化
     invoke random , MAP_WIDTH/2 
@@ -1132,8 +1132,8 @@ LOCAL tot:DWORD
     mov gsX[0], edx
     mov gsY[0], eax
 
-    ; invoke random, 4
-    ; mov gsDir, eax
+    invoke random, 3
+    mov gsDir, eax
 
     ret
 
